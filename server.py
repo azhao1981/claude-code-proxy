@@ -1141,6 +1141,8 @@ async def create_message(
             litellm_request["api_key"] = GEMINI_API_KEY
             logger.debug(f"Using Gemini API key for model: {request.model}")
         elif request.model.startswith("moonshot/"):
+            # Use OpenAI provider with custom base_url for Moonshot
+            litellm_request["model"] = request.model.replace("moonshot/", "openai/")
             litellm_request["api_key"] = MOONSHOT_API_KEY
             litellm_request["base_url"] = "https://api.moonshot.ai/v1"
             logger.debug(f"Using Moonshot API key for model: {request.model}")
