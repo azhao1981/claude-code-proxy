@@ -20,7 +20,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARN,  # Change to INFO level to show more details
+    level=logging.INFO,  # Change to INFO level to show detailed request/response logs
     format='%(asctime)s - %(levelname)s - %(message)s',
 )
 logger = logging.getLogger(__name__)
@@ -371,15 +371,70 @@ class MessagesResponse(BaseModel):
 async def log_requests(request: Request, call_next):
     # Get request details
     method = request.method
+    url = str(request.url)
     path = request.url.path
     
-    # Log only basic request details at debug level
-    logger.debug(f"Request: {method} {path}")
+    # Read the request body
+    body = await request.body()
+    body_str = body.decode('utf-8') if body else ""
+    
+    try:
+        # Try to parse as JSON for pretty printing
+        if body_str and body_str.strip().startswith('{'):
+            body_json = json.loads(body_str)
+            formatted_body = json.dumps(body_json, indent=2, ensure_ascii=False)
+        else:
+            formatted_body = body_str
+    except:
+        formatted_body = body_str
+    
+    # Log request details
+    logger.info("="*80)
+    logger.info(f"📥 REQUEST: {method} {url}")
+    logger.info("-" * 40)
+    if formatted_body:
+        logger.info(f"📝 Request Body:\n{formatted_body}")
+    else:
+        logger.info("📝 Request Body: [Empty]")
     
     # Process the request and get the response
+    start_time = time.time()
     response = await call_next(request)
+    duration = time.time() - start_time
     
-    return response
+    # Read response body
+    response_body = b""
+    async for chunk in response.body_iterator:
+        response_body += chunk
+    
+    try:
+        # Try to parse as JSON for pretty printing
+        response_str = response_body.decode('utf-8')
+        if response_str and response_str.strip().startswith('{'):
+            response_json = json.loads(response_str)
+            formatted_response = json.dumps(response_json, indent=2, ensure_ascii=False)
+        else:
+            formatted_response = response_str
+    except:
+        formatted_response = response_body.decode('utf-8')
+    
+    # Log response details
+    logger.info("-" * 40)
+    logger.info(f"📤 RESPONSE: Status {response.status_code} (Duration: {duration:.2f}s)")
+    if formatted_response:
+        logger.info(f"📋 Response Body:\n{formatted_response}")
+    else:
+        logger.info("📋 Response Body: [Empty]")
+    logger.info("="*80)
+    
+    # Return new response with the original body
+    from fastapi.responses import Response
+    return Response(
+        content=response_body,
+        status_code=response.status_code,
+        headers=dict(response.headers),
+        media_type=response.media_type
+    )
 
 # Not using validation function as we're using the environment API key
 
